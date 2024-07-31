@@ -28,7 +28,8 @@ if 'db' not in st.session_state:
     st.session_state.db = None
 if 'memories' not in st.session_state:
     st.session_state.memories = []
-
+if 'counter' not in st.session_state:
+    st.session_state.counter = 0
 
 
 ### -------------------- CAMERA ------------------------
@@ -288,6 +289,7 @@ if st.session_state.ready:
 
     # Accept user input
     if user_input := st.chat_input("Say Something"):
+        st.session_state.counter += 1
         # Add user message to chat history
         st.session_state.memories.append({"role": "user", "content": user_input})
         # Display user message in chat message container
