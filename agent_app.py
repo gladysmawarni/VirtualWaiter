@@ -28,8 +28,7 @@ if 'db' not in st.session_state:
     st.session_state.db = None
 if 'memories' not in st.session_state:
     st.session_state.memories = []
-if 'counter' not in st.session_state:
-    st.session_state.counter = 0
+
 
 
 ### -------------------- CAMERA ------------------------
@@ -209,15 +208,8 @@ def check_question(question):
     return response_text.content
 
 # function in the case the question is not on topic
-def off_topic_response(conversation):
-  if conversation <= 1:
-    answer = "\nI apologize, I can't answer that question. I can only respond to questions about the menu in this restaurant."
-    st.session_state.memories.append({"role": "assistant", "content": answer})
-
-    with st.chat_message("assistant"):
-        st.write(answer)
-  else:
-    answer = "\nHappy to help!"
+def off_topic_response():
+    answer = "I apologize, I can't answer that question. I can only respond to questions about the menu in this restaurant."
     st.session_state.memories.append({"role": "assistant", "content": answer})
 
     with st.chat_message("assistant"):
@@ -279,7 +271,6 @@ def further_question(state):
   st.session_state.memories.append({"role": "user", "content": prompt})
 
   state['question'] = prompt
-  state['conversation'] += 1
 
   return state
 
@@ -297,7 +288,6 @@ if st.session_state.ready:
 
     # Accept user input
     if user_input := st.chat_input("Say Something"):
-        st.session_state.counter += 1
         # Add user message to chat history
         st.session_state.memories.append({"role": "user", "content": user_input})
         # Display user message in chat message container
@@ -307,7 +297,7 @@ if st.session_state.ready:
         check_bool = check_question(user_input)
 
         if check_bool == "False":
-            off_topic_response(st.session_state.counter)
+            off_topic_response()
         
         else:
             answer = generate(user_input, st.session_state.menu)
