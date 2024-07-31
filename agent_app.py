@@ -241,11 +241,12 @@ def generate(question, menu):
         6. Absolutely NO dialogue tags or speaker label like "Assistant:" or "Waiter:"
         7. Maintain a polite, professional tone throughout the interaction. Suitable to a high-end restaurant.
         8. If asked about recommendations or specialties, only suggest items that are clearly listed on the menu.
-        9. For questions about allergies or dietary restrictions, only confirm information explicitly stated in the menu.
+        9. For questions about allergies or dietary restrictions, only confirm information explicitly stated in the menu or based on the ingredients listed.
         10. If uncertain about any detail, err on the side of caution and inform the customer that it is not mentioned in the menu.
         11. Don't suggest something that you have no knowledge of.
 
         Remember: Your knowledge is limited to the menu. Stick to it rigorously. """
+  
   # prompt template, format the system message and user question
   TEMPLATE = ChatPromptTemplate.from_messages([
     ("system", system),
@@ -285,7 +286,9 @@ if st.session_state.ready:
     
     if st.session_state.counter == 0:
         with st.chat_message("assistant"):
-            st.write('Hello! Welcome to our restaurant, I will be your waiter for today. How can I help you?\n')
+            greetings = 'Hello! Welcome to our restaurant, I will be your waiter for today. How can I help you?\n'
+            st.write(greetings)
+            st.session_state.memories.append({"role": "assistant", "content": greetings})
 
     # Accept user input
     if user_input := st.chat_input("Say Something"):
