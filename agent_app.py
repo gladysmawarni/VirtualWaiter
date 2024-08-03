@@ -11,13 +11,16 @@ from langchain_openai import ChatOpenAI
 # Suppress warnings related to date parsing
 warnings.filterwarnings("ignore")
 
+# openai API key
 os.environ['OPENAI_API_KEY'] = st.secrets['OPENAI_API_KEY']
 
+# webapp title
 st.title('Virtual Waiter')
 
-# initialize base variables
+# initialize columns for the buttons
 col1, col2 = st.columns(2)
 
+## SESSION STATES
 if 'ready' not in st.session_state:
     st.session_state.ready = False
 if 'read_image' not in st.session_state:
@@ -30,135 +33,183 @@ if 'memories' not in st.session_state:
     st.session_state.memories = []
 if 'counter' not in st.session_state:
     st.session_state.counter = 0
+if 'pictures' not in st.session_state:
+    st.session_state.pictures = []
+if 'init' not in st.session_state:
+    st.session_state.init = False
+if 'submitted' not in st.session_state:
+    st.session_state.submitted = False
+    
+if 'camera' not in st.session_state:
+    st.session_state.camera = False
+if 'file_input' not in st.session_state:
+    st.session_state.file_input = False
 
 
 ### -------------------- CAMERA ------------------------
-# Initialize the session state if not already present
-if 'camera' not in st.session_state:
-    st.session_state.camera = False
-
+# Toggle the state of 'camera'
 def toggle_camera():
-    # Toggle the state of 'camera'
     st.session_state.camera = not st.session_state.camera
 
-with col1:
-    # Create a button that toggles the 'camera' state
-    st.button('Toggle Camera', on_click=toggle_camera)
+if st.session_state.read_image:
+    image_button = st.empty()
+    with image_button.container():
+        # Create a button that toggles the 'camera' state
+        col1.button('Toggle Camera', on_click=toggle_camera)
 
-# If 'camera' is True, show the camera input
-if st.session_state.camera:
-    picture = st.camera_input("Take a picture")
+    # If 'camera' is True, show the camera input
+    if st.session_state.camera:
+        picture = st.camera_input("Take a picture")
 
-    if picture:
-        # Getting the base64 string
-        base64_picture = base64.b64encode(picture.getvalue()).decode('utf-8')
+        if picture:
+            st.session_state.pictures.append(picture)
+            st.session_state.init = True
 
-        headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {os.environ['OPENAI_API_KEY'] }"
-        }
+    images_placeholder = st.empty()
+    submit_button = st.empty()
 
-        payload = {
-        "model": "gpt-4o-mini",
-        "messages": [
-            {
-            "role": "user",
-            "content": [
+    if st.session_state.init:
+        images_placeholder.image(st.session_state.pictures, width=300)
+
+        submitted =  submit_button.button(label="SUBMIT", on_click=toggle_camera)
+
+        if submitted:
+            st.session_state.submitted = True
+
+
+    if st.session_state.submitted:
+        image_button.empty()
+        images_placeholder.empty()
+        submit_button.empty()
+        
+
+        with st.spinner('Processing image...'):
+            # Prepare the content list with the text instruction
+            content_list = [
                 {
-                "type": "text",
-                "text": """Extract the menu in this picture, just give me the menu without any introduction. keep the restaurant information."""
-                },
-                {
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:image/jpeg;base64,{base64_picture}"
-                }
+                    "type": "text",
+                    "text": """Extract the menu in this picture, just give me the menu without any introduction. Keep the restaurant information.
+                            Make sure to get the categories, the name of the item, the item description, and the price."""
                 }
             ]
-            }
-        ],
-        "max_tokens": 300
-        }
 
-        response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-
-        raw_data = response.json()
-        menu = raw_data['choices'][0]['message']['content']
-
-        st.session_state.menu = raw_data['choices'][0]['message']['content']
-        st.session_state.ready = True
-
-        st.session_state.read_image = False
-        st.session_state.menu = menu
-
-
-### -------------------- FILE UPLOAD ------------------------
-# Initialize the session state if not already present
-if 'image_input' not in st.session_state:
-    st.session_state.image_input = False
-
-def toggle_image_input():
-    # Toggle the state of 'image_input'
-    st.session_state.image_input = not st.session_state.image_input
-
-
-with col2:
-    # Create a button that toggles the 'image_input' state
-    st.button('Input Image', on_click=toggle_image_input)
-
-# If 'image_input' is True, show the file uploader
-if st.session_state.image_input:
-    with st.form("my-form", clear_on_submit=True):
-        uploaded_file = st.file_uploader("FILE UPLOADER", type=['png', 'jpeg'])
-        submitted = st.form_submit_button("UPLOAD!")
-    
-    if uploaded_file and st.session_state.read_image:
-        with st.spinner('Processing image...'):
-            # Getting the base64 string
-            base64_file = base64.b64encode(uploaded_file.getvalue()).decode('utf-8')
-
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {os.environ['OPENAI_API_KEY'] }"
-            }
-
+            # Loop through the list of image paths and add each image to the content list
+            for image_path in st.session_state.pictures:
+                base64_picture = base64.b64encode(image_path.getvalue()).decode('utf-8')
+                content_list.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_picture}"
+                        }
+                    }
+                )
+            
+            # Create the payload with the content list
             payload = {
                 "model": "gpt-4o-mini",
                 "messages": [
                     {
                         "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": """Extract the menu in this picture, just give me the menu without any introduction. keep the restaurant information."""
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{base64_file}"
-                                }
-                            }
-                        ]
+                        "content": content_list
                     }
-                ],
-                "max_tokens": 300
+                ]
             }
 
-            response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-            
+            # Send the request to the OpenAI API
+            response = requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                
+                headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}"
+                },
+
+                json=payload
+            )
+
             raw_data = response.json()
-
             menu = raw_data['choices'][0]['message']['content']
+            print(menu)
+
+            st.session_state.menu = raw_data['choices'][0]['message']['content']
             st.session_state.ready = True
-
-            # # embeddings
-            # embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-
-            # # store in a vector database
-            # st.session_state.db = FAISS.from_texts(menu, embeddings)
 
             st.session_state.read_image = False
             st.session_state.menu = menu
+
+### -------------------- FILE UPLOAD ------------------------
+def toggle_file_input():
+    st.session_state.file_input = not st.session_state.file_input
+
+if st.session_state.read_image:
+    file_button = st.empty()
+    with file_button.container():
+        col2.button('Input Image', on_click=toggle_file_input)
+
+    # If 'file_input' is True, show the file uploader
+    if st.session_state.file_input:
+        with st.form("my-form", clear_on_submit=True):
+            uploaded_files = st.file_uploader("FILE UPLOADER", type=['png', 'jpeg', 'webp', 'jpg'], accept_multiple_files=True)
+            submitted = st.form_submit_button("SUBMIT")
+
+        
+        if uploaded_files:
+            file_button.empty()
+
+            with st.spinner('Processing image...'):
+                 # Prepare the content list with the text instruction
+                content_list = [
+                    {
+                        "type": "text",
+                        "text": """Extract the menu in this picture, just give me the menu without any introduction. Keep the restaurant information.
+                                Make sure to get the categories, the name of the item, the item description, and the price."""
+                    }
+                ]
+                # Loop through the list of image paths and add each image to the content list
+                for file_path in uploaded_files:
+                    base64_picture = base64.b64encode(file_path.getvalue()).decode('utf-8')
+                    content_list.append(
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_picture}"
+                            }
+                        }
+                    )
+
+                # Create the payload with the content list
+                payload = {
+                    "model": "gpt-4o-mini",
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": content_list
+                        }
+                    ]
+                }
+
+                # Send the request to the OpenAI API
+                response = requests.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    
+                    headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}"
+                    },
+
+                    json=payload
+                )
+
+                raw_data = response.json()
+                menu = raw_data['choices'][0]['message']['content']
+                print(menu)
+
+                st.session_state.menu = raw_data['choices'][0]['message']['content']
+                st.session_state.ready = True
+
+                st.session_state.read_image = False
+                st.session_state.menu = menu
 
 ### ---------------------- FUNCTIONS ----------------------------
 
@@ -209,22 +260,20 @@ def check_question(question):
     return response_text.content
 
 # function in the case the question is not on topic
-def off_topic_response():
-    answer = "I apologize, I can't answer that question. I can only respond to questions about the menu in this restaurant."
+def off_topic_response(conversation):
+  if conversation <= 1:
+    answer = "\nI apologize, I can't answer that question. I can only respond to questions about the menu in this restaurant."
     st.session_state.memories.append({"role": "assistant", "content": answer})
 
     with st.chat_message("assistant"):
         st.write(answer)
-    
-# function to retrieve relevant documents based on the question
-# def retrieve_docs(state):
-#     memory = ', '.join(state["memory"])
+  else:
+    answer = "\nHappy to help!"
+    st.session_state.memories.append({"role": "assistant", "content": answer})
 
-#     # get context
-#     docs_faiss = st.session_state.db.similarity_search(str(memory), k=8)
-#     # store in AgentState
-#     state['documents'] = [doc.page_content for doc in docs_faiss]
-#     return state
+    with st.chat_message("assistant"):
+        st.write(answer)
+
 
 # function to ask llm model question and generate answer
 def generate(question, menu):
@@ -232,26 +281,20 @@ def generate(question, menu):
   memory = st.session_state.memories
 
   # system message - waiter role
-  system = """As a knowledgeable restaurant waiter, your role is to:
-        1. Answer customer questions primarily based on the provided menu.
-        2. Use your culinary knowledge to interpret menu items and ingredients when addressing dietary concerns or preferences.
-        3. Avoid inventing or assuming information not related to standard culinary practices or common ingredients.
-        4. Respond naturally, as if in conversation, without any introductions, self-references, or dialogue tags like "Waiter:".
-        5. Maintain a polite, professional tone suitable for a high-end restaurant.
-        6. When making recommendations or discussing specialties, focus on items listed in the menu.
-        7. For questions about allergies, dietary restrictions, or specific diets (e.g., vegan, vegetarian, gluten-free):
-        a. First, check for explicit mentions in the menu.
-        b. If not explicitly stated, analyze ingredients to suggest suitable options.
-        c. Clearly communicate when a suggestion is based on ingredient analysis rather than explicit menu labeling.
-        8. If uncertain about any detail, inform the customer that it's not specified in the menu and offer to check with the kitchen.
-        9. Don't suggest items or options that aren't related to the menu contents.
+  system = """As a restaurant waiter, your role is to:
+        1. Answer customer questions STRICTLY based on the provided menu.
+        2. Never invent, assume, or add information not explicitly stated in the menu.
+        3. If a question can't be answered using only menu information, politely inform the customer of this limitation.
+        4. Always refer directly to menu content in your responses.
+        5. Respond naturally, as if in conversation, without any introductions or self-references.
+        6. Absolutely NO dialogue tags or speaker label like "Assistant:" or "Waiter:"
+        7. Maintain a polite, professional tone throughout the interaction. Suitable to a high-end restaurant.
+        8. If asked about recommendations or specialties, only suggest items that are clearly listed on the menu.
+        9. For questions about allergies or dietary restrictions, only confirm information explicitly stated in the menu.
+        10. If uncertain about any detail, err on the side of caution and inform the customer that it is not mentioned in the menu.
+        11. Don't suggest something that you have no knowledge of.
 
-        Key points to remember:
-        - Base your knowledge primarily on the menu, but use culinary common sense for ingredient-based questions.
-        - When interpreting ingredients for dietary needs, clarify that you're making an informed suggestion based on the listed ingredients.
-        - If a dietary request can't be confidently answered based on the menu and common culinary knowledge, offer to consult the kitchen for clarification.
-        - Always prioritize customer safety regarding allergies and strict dietary requirements."""
-    
+        Remember: Your knowledge is limited to the menu. Stick to it rigorously. """
   # prompt template, format the system message and user question
   TEMPLATE = ChatPromptTemplate.from_messages([
     ("system", system),
@@ -278,6 +321,7 @@ def further_question(state):
   st.session_state.memories.append({"role": "user", "content": prompt})
 
   state['question'] = prompt
+  state['conversation'] += 1
 
   return state
 
@@ -291,8 +335,7 @@ if st.session_state.ready:
     
     if st.session_state.counter == 0:
         with st.chat_message("assistant"):
-            greetings = 'Hello! Welcome to our restaurant, I will be your waiter for today. How can I help you?\n'
-            st.write(greetings)
+            st.write('Hello! Welcome to our restaurant, I will be your waiter for today. How can I help you?\n')
 
     # Accept user input
     if user_input := st.chat_input("Say Something"):
@@ -306,7 +349,7 @@ if st.session_state.ready:
         check_bool = check_question(user_input)
 
         if check_bool == "False":
-            off_topic_response()
+            off_topic_response(st.session_state.counter)
         
         else:
             answer = generate(user_input, st.session_state.menu)
