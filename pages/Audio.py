@@ -3,7 +3,8 @@ import streamlit as st
 import base64
 import requests
 import os
-import pyaudio
+
+from audiorecorder import audiorecorder
 import wave
 import audioop
 import time
@@ -319,9 +320,6 @@ def generate(question, menu):
     response_text = model.invoke(prompt)
 
     st.session_state.memories.append({"role": "assistant", "content": response_text.content})
-
-    with st.chat_message("assistant"):
-        st.write(response_text.content)
     
     return response_text.content
 
@@ -338,41 +336,6 @@ def further_question(state):
 
 
 # ------------- AUDIO INPUT -------------
-def record_audio(filename="output.wav", rate=16000, channels=1, chunk=1024, format=pyaudio.paInt16, silence_threshold=500, silence_duration=3):
-    audio = pyaudio.PyAudio()
-    stream = audio.open(format=format, channels=channels, rate=rate, input=True, frames_per_buffer=chunk)
-    
-
-    frames = []
-    silence_start = None
-
-    while True:
-        data = stream.read(chunk)
-        frames.append(data)
-
-        # Check the volume level of the audio data
-        rms = audioop.rms(data, 2)  # Root mean square of the audio signal
-
-        # If below the silence threshold, mark the start time of silence
-        if rms < silence_threshold:
-            if silence_start is None:
-                silence_start = time.time()
-        else:
-            silence_start = None  # Reset silence start time if sound is detected
-
-        # If silence has been detected for long enough, stop recording
-        if silence_start and time.time() - silence_start >= silence_duration:
-            break
-
-    stream.stop_stream()
-    stream.close()
-    audio.terminate()
-
-    with wave.open(filename, 'wb') as wf:
-        wf.setnchannels(channels)
-        wf.setsampwidth(audio.get_sample_size(format))
-        wf.setframerate(rate)
-        wf.writeframes(b''.join(frames))
 
 def transcribe_audio():
     client = OpenAI()
@@ -421,11 +384,6 @@ def autoplay(audio):
 
 # ----------------- APP --------------------
 if st.session_state.ready:
-    # Display chat memories from history on app rerun
-    for memory in st.session_state.memories:
-        with st.chat_message(memory["role"]):
-            st.write(memory["content"])
-           
     if st.session_state.counter == 0:
         with st.chat_message("assistant"):
             greeting = 'Hello! Welcome to our restaurant, I will be your waiter for today. How can I help you?'
@@ -444,30 +402,27 @@ if st.session_state.ready:
             )
            
     st.session_state.counter += 1
-    if st.button('Say something!'):
-        # record & transcribe
-        with st.spinner('Listening...'):
-            record_audio()
-            user_input = transcribe_audio()
-
+    if audio := audiorecorder(start_prompt="", stop_prompt="", pause_prompt="", show_visualizer=True, key=None):
+        audio.export("output.wav", format="wav")
+        user_input = transcribe_audio()
         # Add user message to chat history
         st.session_state.memories.append({"role": "user", "content": user_input})
-
-        # Display user message in chat message container
-        with st.chat_message("user"):
-            st.write(user_input)
     
         check_bool = check_question(user_input)
 
         if check_bool == "False":
             answer = off_topic_response(st.session_state.counter)
             st.session_state.audio = generate_audio(answer)
-            autoplay(st.session_state.audio)
         
         else:
             answer = generate(user_input, st.session_state.menu)
             st.session_state.audio = generate_audio(answer)
-            autoplay(st.session_state.audio)
+
+        st.audio(st.session_state.audio, autoplay=True)
+        # Display chat memories from history on app rerun
+        for memory in reversed(st.session_state.memories):
+            with st.chat_message(memory["role"]):
+                st.write(memory["content"])
     
 
 
