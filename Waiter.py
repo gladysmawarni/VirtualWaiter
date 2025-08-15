@@ -107,7 +107,7 @@ if st.session_state.read_image:
             
             # Create the payload with the content list
             payload = {
-                "model": "gpt-4o-mini",
+                "model": "gpt-5-nano",
                 "messages": [
                     {
                         "role": "user",
